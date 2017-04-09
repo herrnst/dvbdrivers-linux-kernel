@@ -39,6 +39,7 @@
 #include "tda18271c2dd.h"
 #include "stv0367.h"
 #include "stv0367_priv.h"
+#include "cxd2841er.h"
 #include "tda18212.h"
 #include "drxk.h"
 #include "drxd.h"
@@ -418,6 +419,46 @@ static int demod_attach_stv0367(struct ngene_channel *chan)
 	return 0;
 }
 
+static int demod_attach_cxd28xx(struct ngene_channel *chan,
+				struct i2c_adapter *i2c)
+{
+	struct cxd2841er_config cfg;
+
+	/* the cxd2841er driver expects 8bit/shifted I2C addresses */
+	cfg.i2c_addr = ((chan->number & 1) ? 0x6d : 0x6c) << 1;
+
+	cfg.xtal = SONY_XTAL_20500;
+	cfg.flags = CXD2841ER_AUTO_IFHZ | CXD2841ER_EARLY_TUNE |
+		CXD2841ER_NO_WAIT_LOCK | CXD2841ER_NO_AGCNEG |
+		CXD2841ER_TSBITS;
+
+	cfg.flags |= CXD2841ER_TS_SERIAL;
+
+	/* attach frontend */
+	chan->fe = dvb_attach(cxd2841er_attach_t_c, &cfg, i2c);
+
+	if (!chan->fe) {
+		pr_err("No Sony CXD28xx found!\n");
+		return -ENODEV;
+	}
+
+	chan->fe->sec_priv = chan;
+	chan->gate_ctrl = chan->fe->ops.i2c_gate_ctrl;
+	chan->fe->ops.i2c_gate_ctrl = drxk_gate_ctrl;
+
+	return 0;
+}
+
+const static char *xo2names[] = {
+	"DUAL DVB-S2",
+	"DUAL DVB-C/T/T2",
+	"DUAL DVB-ISDBT",
+	"DUAL DVB-C/C2/T/T2",
+	"DUAL ATSC",
+	"DUAL DVB-C/C2/T/T2",
+	"", ""
+};
+
 static int init_xo2(struct i2c_adapter *i2c)
 {
 	u8 val, data[2];
@@ -484,6 +525,7 @@ static int cineS2_probe(struct ngene_channel *chan)
 	u8 buf[3];
 	struct i2c_msg i2c_msg = { .flags = 0, .buf = buf };
 	int rc;
+	u8 xo2_type, xo2_id;
 
 	/* tuner 1+2: i2c adapter #0, tuner 3+4: i2c adapter #1 */
 	if (chan->number < 2)
@@ -491,7 +533,30 @@ static int cineS2_probe(struct ngene_channel *chan)
 	else
 		i2c = &chan->dev->channel[1].i2c_adapter;
 
-	if (port_has_stv0900(i2c, chan->number)) {
+	if (port_has_xo2(i2c, &xo2_type, &xo2_id)) {
+		switch (xo2_type) {
+		case DDB_XO2_TYPE_DUOFLEX:
+			init_xo2(i2c);
+			switch (xo2_id >> 2) {
+			case 1:
+			case 2:
+			case 3:
+			case 5:
+				chan->demod_type = DMD_CXD28XX;
+				pr_info("Channel %d: %s\n", chan->number, xo2names[xo2_id >> 2]);
+				demod_attach_cxd28xx(chan, i2c);
+				break;
+			default:
+				pr_info("Channel %d: %s not supported\n",
+					chan->number, xo2names[xo2_id >> 2]);
+				return -ENODEV;
+			}
+		default:
+			pr_info("Channel %d: Unsupported XO2\n",
+				chan->number);
+			return -ENODEV;
+		}
+	} else if (port_has_stv0900(i2c, chan->number)) {
 		chan->demod_type = DMD_STV0900;
 		pr_info("Channel %d: STV0900\n", chan->number);
 		fe_conf = chan->dev->card_info->fe_config[chan->number];
