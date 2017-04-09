@@ -37,6 +37,8 @@
 #include "lgdt330x.h"
 #include "mt2131.h"
 #include "tda18271c2dd.h"
+#include "stv0367.h"
+#include "stv0367_priv.h"
 #include "tda18212.h"
 #include "drxk.h"
 #include "drxd.h"
@@ -307,6 +309,21 @@ static int port_has_drxk(struct i2c_adapter *i2c, int port)
 	return 1;
 }
 
+static int port_has_stv0367(struct i2c_adapter *i2c)
+{
+	u8 val;
+
+	if (i2c_read_reg16(i2c, 0x1e, 0xf000, &val) < 0)
+		return 0;
+	if (val != 0x60)
+		return 0;
+	if (i2c_read_reg16(i2c, 0x1f, 0xf000, &val) < 0)
+		return 0;
+	if (val != 0x60)
+		return 0;
+	return 1;
+}
+
 static int demod_attach_drxk(struct ngene_channel *chan,
 			     struct i2c_adapter *i2c)
 {
@@ -325,6 +342,44 @@ static int demod_attach_drxk(struct ngene_channel *chan,
 	chan->fe->sec_priv = chan;
 	chan->gate_ctrl = chan->fe->ops.i2c_gate_ctrl;
 	chan->fe->ops.i2c_gate_ctrl = drxk_gate_ctrl;
+	return 0;
+}
+
+static struct stv0367_config ddb_stv0367_config[] = {
+	{
+		.demod_address = 0x1f,
+		.xtal = 27000000,
+		.if_khz = 0,
+		.if_iq_mode = FE_TER_NORMAL_IF_TUNER,
+		.ts_mode = STV0367_SERIAL_PUNCT_CLOCK,
+		.clk_pol = STV0367_CLOCKPOLARITY_DEFAULT,
+	}, {
+		.demod_address = 0x1e,
+		.xtal = 27000000,
+		.if_khz = 0,
+		.if_iq_mode = FE_TER_NORMAL_IF_TUNER,
+		.ts_mode = STV0367_SERIAL_PUNCT_CLOCK,
+		.clk_pol = STV0367_CLOCKPOLARITY_DEFAULT,
+	},
+};
+
+static int demod_attach_stv0367(struct ngene_channel *chan)
+{
+	struct i2c_adapter *i2c = &chan->dev->channel[0].i2c_adapter;
+
+	/* attach frontend */
+	chan->fe = dvb_attach(stv0367ddb_attach,
+		&ddb_stv0367_config[(chan->number & 1)], i2c);
+
+	if (!chan->fe) {
+		printk(KERN_ERR "stv0367ddb_attach failed (not found?)\n");
+		return -ENODEV;
+	}
+
+	chan->fe->sec_priv = chan;
+	chan->gate_ctrl = chan->fe->ops.i2c_gate_ctrl;
+	chan->fe->ops.i2c_gate_ctrl = drxk_gate_ctrl;
+
 	return 0;
 }
 
