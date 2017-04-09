@@ -640,6 +640,7 @@ struct ngene_channel {
 	int                   demod_type;
 	int (*gate_ctrl)(struct dvb_frontend *, int);
 
+	struct i2c_client    *i2c_client[1];
 	struct dvb_frontend  *fe;
 	struct dvb_frontend  *fe2;
 	struct dmxdev         dmxdev;
