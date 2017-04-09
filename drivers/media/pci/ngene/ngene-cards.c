@@ -43,6 +43,43 @@
 
 
 /****************************************************************************/
+/* I2C functions ************************************************************/
+/****************************************************************************/
+
+static int i2c_read(struct i2c_adapter *adapter, u8 adr, u8 *val)
+{
+	struct i2c_msg msgs[1] = {{.addr = adr,  .flags = I2C_M_RD,
+				   .buf  = val,  .len   = 1 } };
+	return (i2c_transfer(adapter, msgs, 1) == 1) ? 0 : -1;
+}
+
+static int i2c_read_regs(struct i2c_adapter *adapter,
+			 u8 adr, u8 reg, u8 *val, u8 len)
+{
+	struct i2c_msg msgs[2] = {{.addr = adr,  .flags = 0,
+				   .buf  = &reg, .len   = 1 },
+				  {.addr = adr,  .flags = I2C_M_RD,
+				   .buf  = val,  .len   = len } };
+	return (i2c_transfer(adapter, msgs, 2) == 2) ? 0 : -1;
+}
+
+static int i2c_read_reg(struct i2c_adapter *adapter, u8 adr, u8 reg, u8 *val)
+{
+	return i2c_read_regs(adapter, adr, reg, val, 1);
+}
+
+static int i2c_read_reg16(struct i2c_adapter *adapter, u8 adr,
+			  u16 reg, u8 *val)
+{
+	u8 msg[2] = {reg>>8, reg&0xff};
+	struct i2c_msg msgs[2] = {{.addr = adr, .flags = 0,
+				   .buf  = msg, .len   = 2},
+				  {.addr = adr, .flags = I2C_M_RD,
+				   .buf  = val, .len   = 1} };
+	return (i2c_transfer(adapter, msgs, 2) == 2) ? 0 : -1;
+}
+
+/****************************************************************************/
 /* Demod/tuner attachment ***************************************************/
 /****************************************************************************/
 
@@ -171,24 +208,6 @@ static void cineS2_tuner_i2c_lock(struct dvb_frontend *fe, int lock)
 		down(&chan->dev->pll_mutex);
 	else
 		up(&chan->dev->pll_mutex);
-}
-
-static int i2c_read(struct i2c_adapter *adapter, u8 adr, u8 *val)
-{
-	struct i2c_msg msgs[1] = {{.addr = adr,  .flags = I2C_M_RD,
-				   .buf  = val,  .len   = 1 } };
-	return (i2c_transfer(adapter, msgs, 1) == 1) ? 0 : -1;
-}
-
-static int i2c_read_reg16(struct i2c_adapter *adapter, u8 adr,
-			  u16 reg, u8 *val)
-{
-	u8 msg[2] = {reg>>8, reg&0xff};
-	struct i2c_msg msgs[2] = {{.addr = adr, .flags = 0,
-				   .buf  = msg, .len   = 2},
-				  {.addr = adr, .flags = I2C_M_RD,
-				   .buf  = val, .len   = 1} };
-	return (i2c_transfer(adapter, msgs, 2) == 2) ? 0 : -1;
 }
 
 static int port_has_stv0900(struct i2c_adapter *i2c, int port)
