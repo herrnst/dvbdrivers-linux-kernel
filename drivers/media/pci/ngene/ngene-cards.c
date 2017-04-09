@@ -37,6 +37,7 @@
 #include "lgdt330x.h"
 #include "mt2131.h"
 #include "tda18271c2dd.h"
+#include "tda18212.h"
 #include "drxk.h"
 #include "drxd.h"
 #include "dvb-pll.h"
@@ -159,6 +160,78 @@ static int tuner_attach_tda18271(struct ngene_channel *chan)
 	}
 
 	return 0;
+}
+
+static int tuner_tda18212_ping(struct ngene_channel *chan, unsigned short adr)
+{
+	struct i2c_adapter *adapter = &chan->dev->channel[0].i2c_adapter;
+	u8 tda_id[2];
+	u8 subaddr = 0x00;
+
+	printk(KERN_DEBUG "stv0367-tda18212 tuner ping\n");
+	if (chan->fe->ops.i2c_gate_ctrl)
+		chan->fe->ops.i2c_gate_ctrl(chan->fe, 1);
+
+	if (i2c_read_regs(adapter, adr, subaddr, tda_id, sizeof(tda_id)) < 0)
+		printk(KERN_DEBUG "tda18212 ping 1 fail\n");
+	if (i2c_read_regs(adapter, adr, subaddr, tda_id, sizeof(tda_id)) < 0)
+		printk(KERN_DEBUG "tda18212 ping 2 fail\n");
+
+	if (chan->fe->ops.i2c_gate_ctrl)
+		chan->fe->ops.i2c_gate_ctrl(chan->fe, 0);
+
+	return 0;
+}
+
+static int tuner_attach_tda18212(struct ngene_channel *chan)
+{
+	struct i2c_adapter *adapter = &chan->dev->channel[0].i2c_adapter;
+	struct i2c_client *client;
+	struct tda18212_config config = {
+		.fe = chan->fe,
+		.if_dvbt_6 = 3550,
+		.if_dvbt_7 = 3700,
+		.if_dvbt_8 = 4150,
+		.if_dvbt2_6 = 3250,
+		.if_dvbt2_7 = 4000,
+		.if_dvbt2_8 = 4000,
+		.if_dvbc = 5000,
+	};
+	struct i2c_board_info board_info = {
+		.type = "tda18212",
+		.platform_data = &config,
+	};
+
+	if (chan->number & 1)
+		board_info.addr = 0x63;
+	else
+		board_info.addr = 0x60;
+
+	/* due to a hardware quirk with the I2C gate on the stv0367+tda18212
+	 * combo, the tda18212 must be probed by reading it's id _twice_ when
+	 * cold started, or it very likely will fail.
+	 */
+	if (chan->demod_type == DMD_STV0367)
+		tuner_tda18212_ping(chan, board_info.addr);
+
+	request_module(board_info.type);
+
+	/* perform tuner init/attach */
+	client = i2c_new_device(adapter, &board_info);
+	if (client == NULL || client->dev.driver == NULL)
+		goto err;
+
+	if (!try_module_get(client->dev.driver->owner)) {
+		i2c_unregister_device(client);
+		goto err;
+	}
+
+	chan->i2c_client[0] = client;
+
+	return 0;
+err:
+	printk(KERN_INFO "TDA18212 tuner not found. Device is not fully operational.\n");
+	return -ENODEV;
 }
 
 static int tuner_attach_probe(struct ngene_channel *chan)
