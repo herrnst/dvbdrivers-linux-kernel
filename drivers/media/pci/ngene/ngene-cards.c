@@ -407,7 +407,8 @@ static int cineS2_probe(struct ngene_channel *chan)
 		i2c = &chan->dev->channel[1].i2c_adapter;
 
 	if (port_has_stv0900(i2c, chan->number)) {
-		chan->demod_type = 0;
+		chan->demod_type = DMD_STV0900;
+		pr_info("Channel %d: STV0900\n", chan->number);
 		fe_conf = chan->dev->card_info->fe_config[chan->number];
 		/* demod found, attach it */
 		rc = demod_attach_stv0900(chan);
@@ -436,8 +437,13 @@ static int cineS2_probe(struct ngene_channel *chan)
 			return -EIO;
 		}
 	} else if (port_has_drxk(i2c, chan->number^2)) {
-		chan->demod_type = 1;
+		chan->demod_type = DMD_DRXK;
+		pr_info("Channel %d: DRXK\n", chan->number);
 		demod_attach_drxk(chan, i2c);
+	} else if (port_has_stv0367(i2c)) {
+		chan->demod_type = DMD_STV0367;
+		pr_info("Channel %d: STV0367\n", chan->number);
+		demod_attach_stv0367(chan);
 	} else {
 		printk(KERN_ERR "No demod found on chan %d\n", chan->number);
 		return -ENODEV;
