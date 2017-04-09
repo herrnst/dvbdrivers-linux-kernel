@@ -1,6 +1,4 @@
-#include <asm/io.h>
-#include <asm/pgtable.h>
-#include <asm/page.h>
+#include <linux/spinlock_types.h>
 #include <linux/kmod.h>
 #include <linux/vmalloc.h>
 #include <linux/init.h>
@@ -10,6 +8,9 @@
 #include <linux/signal.h>
 #include <linux/sched.h>
 #include <linux/interrupt.h>
+#include <asm/io.h>
+#include <asm/pgtable.h>
+#include <asm/page.h>
 
 #include "saa716x_spi.h"
 #include "saa716x_msi.h"
