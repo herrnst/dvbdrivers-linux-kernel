@@ -56,6 +56,24 @@ enum DEMOD_TYPE {
 /* I2C functions ************************************************************/
 /****************************************************************************/
 
+static int i2c_io(struct i2c_adapter *adapter, u8 adr,
+		  u8 *wbuf, u32 wlen, u8 *rbuf, u32 rlen)
+{
+	struct i2c_msg msgs[2] = {{.addr = adr,  .flags = 0,
+				   .buf  = wbuf, .len   = wlen },
+				  {.addr = adr,  .flags = I2C_M_RD,
+				   .buf  = rbuf,  .len   = rlen } };
+	return (i2c_transfer(adapter, msgs, 2) == 2) ? 0 : -1;
+}
+
+static int i2c_write(struct i2c_adapter *adap, u8 adr, u8 *data, int len)
+{
+	struct i2c_msg msg = {.addr = adr, .flags = 0,
+			      .buf = data, .len = len};
+
+	return (i2c_transfer(adap, &msg, 1) == 1) ? 0 : -1;
+}
+
 static int i2c_read(struct i2c_adapter *adapter, u8 adr, u8 *val)
 {
 	struct i2c_msg msgs[1] = {{.addr = adr,  .flags = I2C_M_RD,
@@ -87,6 +105,14 @@ static int i2c_read_reg16(struct i2c_adapter *adapter, u8 adr,
 				  {.addr = adr, .flags = I2C_M_RD,
 				   .buf  = val, .len   = 1} };
 	return (i2c_transfer(adapter, msgs, 2) == 2) ? 0 : -1;
+}
+
+static int i2c_write_reg(struct i2c_adapter *adap, u8 adr,
+			 u8 reg, u8 val)
+{
+	u8 msg[2] = {reg, val};
+
+	return i2c_write(adap, adr, msg, 2);
 }
 
 /****************************************************************************/
@@ -389,6 +415,65 @@ static int demod_attach_stv0367(struct ngene_channel *chan)
 	chan->gate_ctrl = chan->fe->ops.i2c_gate_ctrl;
 	chan->fe->ops.i2c_gate_ctrl = drxk_gate_ctrl;
 
+	return 0;
+}
+
+static int init_xo2(struct i2c_adapter *i2c)
+{
+	u8 val, data[2];
+	int res;
+
+	res = i2c_read_regs(i2c, 0x10, 0x04, data, 2);
+	if (res < 0)
+		return res;
+
+	if (data[0] != 0x01)  {
+		pr_info("Invalid XO2\n");
+		return -1;
+	}
+
+	i2c_read_reg(i2c, 0x10, 0x08, &val);
+	if (val != 0) {
+		i2c_write_reg(i2c, 0x10, 0x08, 0x00);
+		msleep(100);
+	}
+	/* Enable tuner power, disable pll, reset demods */
+	i2c_write_reg(i2c, 0x10, 0x08, 0x04);
+	usleep_range(2000, 3000);
+	/* Release demod resets */
+	i2c_write_reg(i2c, 0x10, 0x08, 0x07);
+
+	/* speed: 2=90 MBit/s */
+	i2c_write_reg(i2c, 0x10, 0x09, 0x02);
+
+	i2c_write_reg(i2c, 0x10, 0x0a, 0x01);
+	i2c_write_reg(i2c, 0x10, 0x0b, 0x01);
+
+	usleep_range(2000, 3000);
+	/* Start XO2 PLL */
+	i2c_write_reg(i2c, 0x10, 0x08, 0x87);
+
+	return 0;
+}
+
+static int port_has_xo2(struct i2c_adapter *i2c, u8 *type, u8 *id)
+{
+	u8 probe[1] = { 0x00 }, data[4];
+
+	*type = DDB_XO2_TYPE_NONE;
+
+	if (i2c_io(i2c, 0x10, probe, 1, data, 4))
+		return 0;
+	if (data[0] == 'D' && data[1] == 'F') {
+		*id = data[2];
+		*type = DDB_XO2_TYPE_DUOFLEX;
+		return 1;
+	}
+	if (data[0] == 'C' && data[1] == 'I') {
+		*id = data[2];
+		*type = DDB_XO2_TYPE_CI;
+		return 1;
+	}
 	return 0;
 }
 

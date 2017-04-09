@@ -882,6 +882,16 @@ struct ngene_buffer {
 };
 #endif
 
+#define DDB_XO2_TYPE_NONE	0
+#define DDB_XO2_TYPE_DUOFLEX	1
+#define DDB_XO2_TYPE_CI		2
+
+#define DDB_TUNER_XO2_DVBS_STV0910	32
+#define DDB_TUNER_XO2_DVBCT2_SONY	33
+#define DDB_TUNER_XO2_ISDBT_SONY	34
+#define DDB_TUNER_XO2_DVBC2T2_SONY	35
+#define DDB_TUNER_XO2_ATSC_ST		36
+#define DDB_TUNER_XO2_DVBC2T2I_SONY	37
 
 /* Provided by ngene-core.c */
 int ngene_probe(struct pci_dev *pci_dev, const struct pci_device_id *id);
