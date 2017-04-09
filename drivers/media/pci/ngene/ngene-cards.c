@@ -238,10 +238,19 @@ err:
 
 static int tuner_attach_probe(struct ngene_channel *chan)
 {
-	if (chan->demod_type == 0)
+	switch (chan->demod_type) {
+	case DMD_STV0900:
 		return tuner_attach_stv6110(chan);
-	if (chan->demod_type == 1)
+	case DMD_DRXK:
 		return tuner_attach_tda18271(chan);
+	case DMD_STV0367:
+	case DMD_CXD28XX:
+		return tuner_attach_tda18212(chan);
+	default:
+		pr_err("Unknown demod %x\n", chan->demod_type);
+		break;
+	}
+
 	return -EINVAL;
 }
 
