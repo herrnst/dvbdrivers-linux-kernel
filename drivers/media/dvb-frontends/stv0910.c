@@ -1293,7 +1293,7 @@ static int read_snr(struct dvb_frontend *fe)
 
 	if (!get_signal_to_noise(state, &snrval)) {
 		p->cnr.stat[0].scale = FE_SCALE_DECIBEL;
-		p->cnr.stat[0].uvalue = snrval;
+		p->cnr.stat[0].uvalue = 100 * snrval; /* fix scale */
 	} else
 		p->cnr.stat[0].scale = FE_SCALE_NOT_AVAILABLE;
 
