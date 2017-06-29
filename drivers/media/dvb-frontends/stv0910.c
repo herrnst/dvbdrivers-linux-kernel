@@ -1368,6 +1368,13 @@ static int read_status(struct dvb_frontend *fe, enum fe_status *status)
 	}
 	if (cur_receive_mode == RCVMODE_NONE) {
 		set_vth(state);
+
+		/* reset signal statistics */
+		p->strength.stat[0].scale = FE_SCALE_NOT_AVAILABLE;
+		p->cnr.stat[0].scale = FE_SCALE_NOT_AVAILABLE;
+		p->pre_bit_error.stat[0].scale = FE_SCALE_NOT_AVAILABLE;
+		p->pre_bit_count.stat[0].scale = FE_SCALE_NOT_AVAILABLE;
+
 		return 0;
 	}
 
@@ -1467,15 +1474,6 @@ static int read_status(struct dvb_frontend *fe, enum fe_status *status)
 	}
 
 	/* read signal statistics */
-
-	/* stop and reset if no receive mode is active */
-	if (cur_receive_mode == RCVMODE_NONE) {
-		p->strength.stat[0].scale = FE_SCALE_NOT_AVAILABLE;
-		p->cnr.stat[0].scale = FE_SCALE_NOT_AVAILABLE;
-		p->pre_bit_error.stat[0].scale = FE_SCALE_NOT_AVAILABLE;
-		p->pre_bit_count.stat[0].scale = FE_SCALE_NOT_AVAILABLE;
-		return 0;
-	}
 
 	/* read signal strength */
 	read_signal_strength(fe);
