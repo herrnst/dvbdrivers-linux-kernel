@@ -633,7 +633,7 @@ static int get_signal_to_noise(struct stv *state, s32 *signal_to_noise)
 	*signal_to_noise = 0;
 
 	if (!state->started)
-		return 0;
+		return -1;
 
 	if (state->receive_mode == RCVMODE_DVBS2) {
 		read_reg(state, RSTV0910_P2_NNOSPLHT1 + state->regoff,
