@@ -1417,60 +1417,59 @@ static int read_status(struct dvb_frontend *fe, enum fe_status *status)
 		}
 	}
 
-	if (!feclock)
-		return 0;
+	if (feclock)
+		*status |= FE_HAS_LOCK;
 
-	*status |= FE_HAS_LOCK;
+		if (state->first_time_lock) {
+			u8 tmp;
 
-	if (state->first_time_lock) {
-		u8 tmp;
+			state->first_time_lock = 0;
 
-		state->first_time_lock = 0;
+			manage_matype_info(state);
 
-		manage_matype_info(state);
+			if (state->receive_mode == RCVMODE_DVBS2) {
+				/* FSTV0910_P2_MANUALSX_ROLLOFF,
+				 * FSTV0910_P2_MANUALS2_ROLLOFF = 0
+				 */
+				state->demod_bits &= ~0x84;
+				write_reg(state, RSTV0910_P2_DEMOD + state->regoff,
+					  state->demod_bits);
+				read_reg(state, RSTV0910_P2_PDELCTRL2 + state->regoff,
+					 &tmp);
+				/*reset DVBS2 packet delinator error counter */
+				tmp |= 0x40;
+				write_reg(state, RSTV0910_P2_PDELCTRL2 + state->regoff,
+					  tmp);
+				/*reset DVBS2 packet delinator error counter */
+				tmp &= ~0x40;
+				write_reg(state, RSTV0910_P2_PDELCTRL2 + state->regoff,
+					  tmp);
 
-		if (state->receive_mode == RCVMODE_DVBS2) {
-			/* FSTV0910_P2_MANUALSX_ROLLOFF,
-			 * FSTV0910_P2_MANUALS2_ROLLOFF = 0
+				state->berscale = 2;
+				state->last_bernumerator = 0;
+				state->last_berdenominator = 1;
+				/* force to PRE BCH Rate */
+				write_reg(state, RSTV0910_P2_ERRCTRL1 + state->regoff,
+					  BER_SRC_S2 | state->berscale);
+			} else {
+				state->berscale = 2;
+				state->last_bernumerator = 0;
+				state->last_berdenominator = 1;
+				/* force to PRE RS Rate */
+				write_reg(state, RSTV0910_P2_ERRCTRL1 + state->regoff,
+					  BER_SRC_S | state->berscale);
+			}
+			/*Reset the Total packet counter */
+			write_reg(state, RSTV0910_P2_FBERCPT4 + state->regoff, 0x00);
+			/* Reset the packet Error counter2 (and Set it to
+			 * infinit error count mode )
 			 */
-			state->demod_bits &= ~0x84;
-			write_reg(state, RSTV0910_P2_DEMOD + state->regoff,
-				  state->demod_bits);
-			read_reg(state, RSTV0910_P2_PDELCTRL2 + state->regoff,
-				 &tmp);
-			/*reset DVBS2 packet delinator error counter */
-			tmp |= 0x40;
-			write_reg(state, RSTV0910_P2_PDELCTRL2 + state->regoff,
-				  tmp);
-			/*reset DVBS2 packet delinator error counter */
-			tmp &= ~0x40;
-			write_reg(state, RSTV0910_P2_PDELCTRL2 + state->regoff,
-				  tmp);
+			write_reg(state, RSTV0910_P2_ERRCTRL2 + state->regoff, 0xc1);
 
-			state->berscale = 2;
-			state->last_bernumerator = 0;
-			state->last_berdenominator = 1;
-			/* force to PRE BCH Rate */
-			write_reg(state, RSTV0910_P2_ERRCTRL1 + state->regoff,
-				  BER_SRC_S2 | state->berscale);
-		} else {
-			state->berscale = 2;
-			state->last_bernumerator = 0;
-			state->last_berdenominator = 1;
-			/* force to PRE RS Rate */
-			write_reg(state, RSTV0910_P2_ERRCTRL1 + state->regoff,
-				  BER_SRC_S | state->berscale);
+			set_vth_default(state);
+			if (state->receive_mode == RCVMODE_DVBS)
+				enable_puncture_rate(state, state->puncture_rate);
 		}
-		/*Reset the Total packet counter */
-		write_reg(state, RSTV0910_P2_FBERCPT4 + state->regoff, 0x00);
-		/* Reset the packet Error counter2 (and Set it to
-		 * infinit error count mode )
-		 */
-		write_reg(state, RSTV0910_P2_ERRCTRL2 + state->regoff, 0xc1);
-
-		set_vth_default(state);
-		if (state->receive_mode == RCVMODE_DVBS)
-			enable_puncture_rate(state, state->puncture_rate);
 	}
 
 	/* read signal statistics */
